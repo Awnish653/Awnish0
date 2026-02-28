@@ -4,37 +4,151 @@
    Created with ❤️ by awnish
    ============================================== */
 
-   addEventListener('fetch', event => {
+addEventListener('fetch', event => {
     event.respondWith(handleRequest(event.request))
 })
 
-const IMG_BB_API_KEY = 'b32ff9b073b75334477d3f1faf2bb2a5' // API Key managed by 𝐃ᴇᴠ|𝐀ɴ𝐬ʜ𝐀ᴘɪ
+const IMG_BB_API_KEY = 'b32ff9b073b75334477d3f1faf2bb2a5'
 const DECOHERE_URL = 'https://www.decohere.ai/api/accountDetails?token=turbo'
 const GENERATE_TURBO_URL = 'https://turbo.decohere.ai/generate/turbo'
-const CREDIT_OWNER = 'awnish' // DO NOT REMOVE OR MODIFY THIS CREDIT
-const CREDIT_CHANNEL = 'https://t.me/AWNISHXRAJ // Official channel by awnish 
+const CREDIT_OWNER = 'awnish'
+const CREDIT_CHANNEL = 'https://t.me/AWNISHXRAJ' // ✅ Fixed
 
 function generateSeed() {
     return Math.floor(Math.random() * 2147483647)
 }
 
 async function fetchTurboToken() {
-    const userAgent = getRandomUserAgent()
-    const response = await fetch(DECOHERE_URL, {
-        headers: {
-            "Host": "www.decohere.ai",
-            "User-Agent": userAgent,
-            "Accept": "*/*",
-            "X-Requested-With": "mark.via",
-            "Sec-Fetch-Site": "same-origin",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Dest": "empty",
-            "Referer": "https://www.decohere.ai/create",
-            "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8",
-            "X-Credit": CREDIT_OWNER // Credit header added by awnish
-        }
-    })
+    const response = await fetch(DECOHERE_URL)
     const data = await response.json()
+    return data.turboToken
+}
+
+async function fetchWithAuth(url, data, authorization) {
+    const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${authorization}`
+        },
+        body: JSON.stringify(data)
+    })
+
+    return {
+        response: await response.text(),
+        http_code: response.status
+    }
+}
+
+async function uploadToImgBB(base64Image) {
+    const formData = new FormData()
+    formData.append('key', IMG_BB_API_KEY)
+    formData.append('image', base64Image)
+
+    const response = await fetch('https://api.imgbb.com/1/upload', {
+        method: 'POST',
+        body: formData
+    })
+
+    const data = await response.json()
+    return data.data?.url || null
+}
+
+async function fetchAndDisplayImages(prompt, imageNumber, turboToken) {
+    const seedValue = generateSeed()
+    const imageUrls = {}
+
+    for (let i = 0; i < imageNumber; i++) {
+        const data = {
+            prompt: prompt,
+            seed: seedValue + i,
+            width: 576,
+            height: 1024,
+            steps: 4
+        }
+
+        const result = await fetchWithAuth(GENERATE_TURBO_URL, data, turboToken)
+
+        if (result.http_code === 200) {
+            const responseData = JSON.parse(result.response)
+            const base64Image = responseData.image
+
+            if (base64Image) {
+                const imageUrl = await uploadToImgBB(base64Image)
+                imageUrls[`image_url_${i + 1}`] = imageUrl
+            } else {
+                return { error: "Image generation failed." }
+            }
+        } else {
+            return { error: `HTTP Error ${result.http_code}` }
+        }
+    }
+
+    return imageUrls
+}
+
+async function handleRequest(request) {
+    const url = new URL(request.url)
+    const prompt = url.searchParams.get('prompt')
+    const imageNumber = parseInt(url.searchParams.get('image'), 10)
+
+    if (!prompt || isNaN(imageNumber)) {
+        return new Response(JSON.stringify({
+            error: 'Invalid parameters.',
+            usage: '?prompt=YOUR_PROMPT&image=NUMBER'
+        }, null, 2), {
+            status: 400,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        })
+    }
+
+    try {
+        const turboToken = await fetchTurboToken()
+        if (!turboToken) {
+            throw new Error("Token fetch failed")
+        }
+
+        const imageUrls = await fetchAndDisplayImages(prompt, imageNumber, turboToken)
+
+        if (imageUrls.error) {
+            return new Response(JSON.stringify(imageUrls, null, 2), {
+                status: 500,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                }
+            })
+        }
+
+        return new Response(JSON.stringify({
+            ...imageUrls,
+            developer: CREDIT_OWNER,
+            channel: CREDIT_CHANNEL
+        }, null, 2), {
+            status: 200,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            }
+        })
+
+    } catch (error) {
+        return new Response(JSON.stringify({
+            error: 'Unexpected error occurred.',
+            message: error.message
+        }, null, 2), {
+            status: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*',
+                'X-Error-Handled-By': CREDIT_OWNER
+            }
+        })
+    }
+        }    const data = await response.json()
     return data.turboToken
 }
 
@@ -268,4 +382,5 @@ async function handleRequest(request) {
         })
     }
 }
+
 
